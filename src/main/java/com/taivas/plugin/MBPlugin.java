@@ -3,8 +3,10 @@ package com.taivas.plugin;
 import com.taivas.mb2_plugin_lib.schema.*;
 import com.taivas.rcon.RconClient;
 import com.taivas.settings.Settings;
+import org.pf4j.ExtensionPoint;
 
-public interface Plugin {
+public interface MBPlugin extends ExtensionPoint {
+
     String getPluginName();
     void onPluginActivate(RconClient rcon, Settings settings);
     void onPluginDeactivate();
