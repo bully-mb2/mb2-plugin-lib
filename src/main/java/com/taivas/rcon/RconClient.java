@@ -14,12 +14,12 @@ import java.util.regex.Pattern;
 
 public class RconClient {
 
+    public static final int DEFAULT_TIMEOUT_MILLISECONDS = 200;
     private static final Logger LOG = LoggerFactory.getLogger(RconClient.class);
     private static final String COMMAND_PREFIX = new String(new char[]{255, 255, 255, 255});
     private static final Charset CHARSET = Charset.forName("cp1252");
     private static final Pattern STATUS_PATTERN = Pattern.compile("^ ([0-9]{1,2}) {5}");
     private static final int RECEIVE_BUFFER_SIZE = 1024;
-    private static final int DEFAULT_TIMEOUT_MILLISECONDS = 200;
 
     private InetSocketAddress address;
     private String password;
@@ -38,17 +38,20 @@ public class RconClient {
         this.address = address;
         this.password = password;
 
-        LOG.info("Binding RconClient to {}", bindAddress.getHostString());
+        LOG.info("Binding to {}:{}", bindAddress.getHostName(), bindAddress.getPort());
         socket = new DatagramSocket(bindAddress);
+        LOG.info("Connecting to {}:{}", address.getHostName(), address.getPort());
+        socket.connect(address);
         socket.setSoTimeout(timeoutMilliseconds);
         LOG.info("Ready to send commands");
     }
 
     @SuppressWarnings("InfiniteLoopStatement")
-    public String send(String command) {
+    public RconResult send(String command) {
         String payload = String.format("%srcon %s %s", COMMAND_PREFIX, password, command);
         byte[] bytes = payload.getBytes(CHARSET);
         DatagramPacket packet = new DatagramPacket(bytes, bytes.length, address);
+        RconResult.Status status = RconResult.Status.FAILED;
         StringWriter response = new StringWriter();
 
         try {
@@ -59,32 +62,33 @@ public class RconClient {
                 socket.receive(packet);
                 String unfiltered = new String(bytes, CHARSET);
                 response.append(unfiltered.replaceAll("\\x00", "").replace(COMMAND_PREFIX + "print\n", ""));
+                status = RconResult.Status.OK;
             }
         } catch (SocketTimeoutException ignored) {
         } catch (IOException e) {
             LOG.error("Couldn't send rcon command", e);
         }
 
-        return response.toString();
+        return new RconResult(status, response.toString());
     }
 
-    public String addIp(String ip) {
+    public RconResult addIp(String ip) {
         return send(String.format("addip \"%s\"", ip));
     }
 
-    public String removeIp(String ip) {
+    public RconResult removeIp(String ip) {
         return send(String.format("removeip \"%s\"", ip));
     }
 
-    public String kick(int slot) {
+    public RconResult kick(int slot) {
         return send(String.format("kick %d", slot));
     }
 
-    public String ban(int slot) {
+    public RconResult ban(int slot) {
         return send(String.format("ban %d", slot));
     }
 
-    public String status(boolean truncateNames) {
+    public RconResult status(boolean truncateNames) {
         if (truncateNames) {
             return send("status");
         }
@@ -92,14 +96,18 @@ public class RconClient {
         return send("status notrunc");
     }
 
-    public String status() {
+    public RconResult status() {
         return status(false);
     }
 
     public List<Integer> playerSlots() {
         List<Integer> slots = new ArrayList<>();
-        String[] status;
-        status = status(true).split("\n");
+        RconResult result = status(true);
+        if (result.getStatus() == RconResult.Status.FAILED) {
+            return slots;
+        }
+
+        String[] status = result.getMessage().split("\n");
         if (status.length < 2) {
             return slots;
         }
@@ -114,52 +122,63 @@ public class RconClient {
         return slots;
     }
 
-    public String say(String message) {
+    public RconResult say(String message) {
         return send(String.format("svsay \"%s\"", message));
     }
 
-    public String tell(int slot, String message) {
+    public RconResult tell(int slot, String message) {
         return send(String.format("svtell %d \"%s\"", slot, message));
     }
 
-    public String newRound() {
+    public RconResult newRound() {
         return send("newround");
     }
 
-    public String map(String map) {
+    public RconResult map(String map) {
         return send(String.format("map \"%s\"", map));
     }
 
-    public String mode(int mode) {
+    public RconResult mode(int mode) {
         return send(String.format("mbmode %d", mode));
     }
 
-    public String mode(int mode, String map) {
+    public RconResult mode(int mode, String map) {
         return send(String.format("mbmode %d \"%s\"", mode, map));
     }
 
-    public String printAll(String message) {
+    public RconResult snd(String soundPath) {
+        return send(String.format("snd \"%s\"", soundPath));
+    }
+
+    public RconResult sndTeam(String team, String soundPath) {
+        return send(String.format("sndTeam \"%s\" \"%s\"", team, soundPath));
+    }
+
+    public RconResult sndClient(int slot, String soundPath) {
+        return send(String.format("sndClient %d \"%s\"", slot, soundPath));
+    }
+
+    public RconResult printAll(String message) {
         return print("all", message, false);
     }
 
-    public String print(int slot, String message) {
+    public RconResult print(int slot, String message) {
         return print("" + slot, message, false);
     }
 
-    public String printConAll(String message) {
+    public RconResult printConAll(String message) {
         return print("all", message, true);
     }
 
-    public String printCon(int slot, String message) {
+    public RconResult printCon(int slot, String message) {
         return print("" + slot, message, true);
     }
 
-    private String print(String target, String message, boolean consoleOnly) {
+    private RconResult print(String target, String message, boolean consoleOnly) {
         if (consoleOnly) {
             return send(String.format("svprintcon %s \"%s\"", target, message));
         }
 
         return send(String.format("svprint %s \"%s\"", target, message));
     }
-
 }
