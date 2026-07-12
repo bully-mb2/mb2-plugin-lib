@@ -12,7 +12,7 @@ Then you can use it in your own project by importing it as a dependency
 <dependency>
     <groupId>com.taivas</groupId>
     <artifactId>mb2-plugin-lib</artifactId>
-    <version>1.6.0-SNAPSHOT</version>
+    <version>1.8.2</version>
 </dependency>
 ```
 Example usage: [MB2 Plugin Example](https://github.com/bully-mb2/mb2-plugin-example)
